@@ -6,7 +6,7 @@ import datetime
 
 # Initialize DynamoDB client
 dynamodb = boto3.resource('dynamodb')
-users_table = dynamodb.Table('Users')
+users_table = dynamodb.Table('cms-users')
 
 # Configuration for JWT
 SECRET_KEY = "your_secret_key"  # Replace with your secret key

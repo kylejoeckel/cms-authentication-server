@@ -4,6 +4,11 @@ provider:
   name: aws
   runtime: python3.10
   region: us-east-1
+  httpApi:
+    cors:
+      allowedOrigins: ${self:custom.cors.origins}
+      allowedHeaders: ${self:custom.cors.headers}
+      allowCredentials: ${self:custom.cors.allowCredentials}
   iamRoleStatements:
     - Effect: Allow
       Action:
@@ -13,7 +18,7 @@ provider:
         - dynamodb:PutItem
         - dynamodb:UpdateItem
         - dynamodb:DeleteItem
-      Resource: "arn:aws:dynamodb:us-east-1:*:table/CMS-Users"
+      Resource: "arn:aws:dynamodb:us-east-1:*:table/cms-users"
 
 functions:
   authenticate:
@@ -30,13 +35,48 @@ functions:
           path: user
           method: post
           cors: true
+  changePassword:
+    handler: handlers.ChangePassword.changePassword
+    events:
+      - http:
+          path: user/change-password
+          method: post
+          cors: true
+  getUser:
+    handler: handlers.GetUser.getUser
+    events:
+      - http:
+          path: user/{userId}
+          method: get
+          cors: true
+  getAllUsersByOrganization:
+    handler: handlers.GetAllUsers.getAllUsersByOrganization
+    events:
+      - http:
+          path: users/{organizationId}
+          method: get
+          cors: true
+  removeUser:
+    handler: handlers.RemoveUser.removeUser
+    events:
+      - http:
+          path: user/{userId}/delete
+          method: delete
+          cors: true
+  forgotPassword:
+    handler: handlers.ForgotPassword.forgotPassword
+    events:
+      - http:
+          path: user/forgot-password
+          method: post
+          cors: true
 
 resources:
   Resources:
     UsersTable:
       Type: AWS::DynamoDB::Table
       Properties:
-        TableName: CMS-Users
+        TableName: cms-users
         AttributeDefinitions:
           - AttributeName: organizationId
             AttributeType: S
@@ -64,10 +104,20 @@ plugins:
 custom:
   stage: ${opt:stage, 'dev'}
   region: ${opt:region, 'us-east-1'}
+  cors:
+    origins:
+      - '*'
+    headers:
+      - Content-Type
+      - X-Amz-Date
+      - Authorization
+      - X-Api-Key
+      - X-Amz-Security-Token
+    allowCredentials: true
 
 plugins:
   - serverless-offline
   - serverless-dynamodb-local
 
 environment:
-  DYNAMODB_TABLE: CMS-Users
+  DYNAMODB_TABLE: cms-users
