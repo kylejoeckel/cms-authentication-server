@@ -18,7 +18,15 @@ provider:
         - dynamodb:PutItem
         - dynamodb:UpdateItem
         - dynamodb:DeleteItem
-      Resource: "arn:aws:dynamodb:us-east-1:*:table/cms-users"
+      Resource:
+        - "arn:aws:dynamodb:us-east-1:*:table/cms-users"
+        - "arn:aws:dynamodb:us-east-1:*:table/cms-users/index/*"
+    - Effect: Allow
+      Action:
+        - dynamodb:GetItem
+        - dynamodb:Query
+        - dynamodb:Scan  # Add more actions as necessary
+      Resource: "arn:aws:dynamodb:us-east-1:894261592074:table/resturant-data-server-dev"
 
 functions:
   authenticate:
@@ -82,6 +90,8 @@ resources:
             AttributeType: S
           - AttributeName: userId
             AttributeType: S
+          - AttributeName: email
+            AttributeType: S  # Ensure this is defined if it's being used as an index key
         KeySchema:
           - AttributeName: organizationId
             KeyType: HASH
@@ -89,19 +99,22 @@ resources:
             KeyType: RANGE
         BillingMode: PAY_PER_REQUEST
         GlobalSecondaryIndexes:
-          - IndexName: UserIdIndex
+          - IndexName: EmailIndex
             KeySchema:
-              - AttributeName: userId
+              - AttributeName: email
                 KeyType: HASH
             Projection:
-              ProjectionType: ALL
+              ProjectionType: "ALL"  
 
 plugins:
   - serverless-python-requirements
   - serverless-offline
+  - serverless-dynamodb-local
 
 
 custom:
+  pythonRequirements:
+    dockerizePip: true
   stage: ${opt:stage, 'dev'}
   region: ${opt:region, 'us-east-1'}
   cors:
@@ -114,10 +127,6 @@ custom:
       - X-Api-Key
       - X-Amz-Security-Token
     allowCredentials: true
-
-plugins:
-  - serverless-offline
-  - serverless-dynamodb-local
 
 environment:
   DYNAMODB_TABLE: cms-users

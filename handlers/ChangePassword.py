@@ -1,6 +1,7 @@
 import json
-import bcrypt
 import boto3
+import os
+import hashlib
 
 # Initialize DynamoDB client
 dynamodb = boto3.resource('dynamodb')
@@ -25,18 +26,23 @@ def changePassword(event, context):
             return {"statusCode": 404, "body": json.dumps({"error": "User not found"})}
         user = response['Item']
 
-        # Verify old password
-        if not bcrypt.checkpw(old_password.encode('utf-8'), user['password'].encode('utf-8')):
+        # Verify old password using stored salt and hash
+        stored_salt, stored_hash = user['password'].split('$')
+        old_hash = hashlib.pbkdf2_hmac('sha256', old_password.encode('utf-8'), bytes.fromhex(stored_salt), 100000)
+
+        if old_hash.hex() != stored_hash:
             return {"statusCode": 401, "body": json.dumps({"error": "Invalid old password"})}
 
-        # Hash new password
-        hashed_new_password = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        # Generate new salt and hash new password
+        new_salt = os.urandom(16)
+        new_hashed_password = hashlib.pbkdf2_hmac('sha256', new_password.encode('utf-8'), new_salt, 100000)
+        new_storage_format = f"{new_salt.hex()}${new_hashed_password.hex()}"
 
         # Update password in the database
         users_table.update_item(
             Key={'userId': user_id},
             UpdateExpression='SET password = :val',
-            ExpressionAttributeValues={':val': hashed_new_password}
+            ExpressionAttributeValues={':val': new_storage_format}
         )
 
         # Return success message
@@ -47,3 +53,5 @@ def changePassword(event, context):
 
     except Exception as e:
         return {"statusCode": 500, "body": json.dumps({"error": str(e)})}
+
+

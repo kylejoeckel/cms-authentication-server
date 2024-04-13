@@ -1,7 +1,8 @@
 import json
-import bcrypt
 import uuid
 import boto3
+import os
+import hashlib
 from botocore.exceptions import ClientError
 
 # Initialize DynamoDB clients
@@ -25,7 +26,7 @@ def createUser(event, context):
 
         # Check if email already exists
         response = users_table.query(
-            IndexName='EmailIndex',  # Make sure to create this GSI in your DynamoDB table definition
+            IndexName='EmailIndex',  # Make sure this GSI is already created in your DynamoDB table definition
             KeyConditionExpression='email = :email',
             ExpressionAttributeValues={':email': email}
         )
@@ -34,13 +35,15 @@ def createUser(event, context):
 
         # Check if organization exists
         response = organizations_table.get_item(
-            Key={'organizationId': id}
+            Key={'id': organization_id}
         )
         if 'Item' not in response:
             return {"statusCode": 404, "body": json.dumps({"error": "Organization not found"})}
 
-        # Hash password
-        hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+        # Hash password using PBKDF2 HMAC SHA-256
+        salt = os.urandom(16)
+        hashed_password = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100000)
+        storage_format = f"{salt.hex()}${hashed_password.hex()}"
 
         user_id = str(uuid.uuid4())
 
@@ -50,7 +53,7 @@ def createUser(event, context):
                 'userId': user_id,
                 'userName': user_name,
                 'email': email,
-                'password': hashed_password.decode('utf-8'),
+                'password': storage_format,  # Storing salt and hashed password
                 'organizationId': organization_id
             }
         )
