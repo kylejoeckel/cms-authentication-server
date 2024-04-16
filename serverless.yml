@@ -1,0 +1,132 @@
+service: cms-authentication-service
+
+provider:
+  name: aws
+  runtime: python3.10
+  region: us-east-1
+  httpApi:
+    cors:
+      allowedOrigins: ${self:custom.cors.origins}
+      allowedHeaders: ${self:custom.cors.headers}
+      allowCredentials: ${self:custom.cors.allowCredentials}
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:Query
+        - dynamodb:Scan
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+      Resource:
+        - "arn:aws:dynamodb:us-east-1:*:table/cms-users"
+        - "arn:aws:dynamodb:us-east-1:*:table/cms-users/index/*"
+    - Effect: Allow
+      Action:
+        - dynamodb:GetItem
+        - dynamodb:Query
+        - dynamodb:Scan  # Add more actions as necessary
+      Resource: "arn:aws:dynamodb:us-east-1:894261592074:table/resturant-data-server-dev"
+
+functions:
+  authenticate:
+    handler: handlers.Authenticate.authenticate
+    events:
+      - http:
+          path: auth/login
+          method: post
+          cors: true
+  createUser:
+    handler: handlers.CreateUser.createUser
+    events:
+      - http:
+          path: user
+          method: post
+          cors: true
+  changePassword:
+    handler: handlers.ChangePassword.changePassword
+    events:
+      - http:
+          path: user/change-password
+          method: post
+          cors: true
+  getUser:
+    handler: handlers.GetUser.getUser
+    events:
+      - http:
+          path: user/{userId}
+          method: get
+          cors: true
+  getAllUsersByOrganization:
+    handler: handlers.GetAllUsers.getAllUsersByOrganization
+    events:
+      - http:
+          path: users/{organizationId}
+          method: get
+          cors: true
+  removeUser:
+    handler: handlers.RemoveUser.removeUser
+    events:
+      - http:
+          path: user/{userId}/delete
+          method: delete
+          cors: true
+  forgotPassword:
+    handler: handlers.ForgotPassword.forgotPassword
+    events:
+      - http:
+          path: user/forgot-password
+          method: post
+          cors: true
+
+resources:
+  Resources:
+    UsersTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: cms-users
+        AttributeDefinitions:
+          - AttributeName: organizationId
+            AttributeType: S
+          - AttributeName: userId
+            AttributeType: S
+          - AttributeName: email
+            AttributeType: S  # Ensure this is defined if it's being used as an index key
+        KeySchema:
+          - AttributeName: organizationId
+            KeyType: HASH
+          - AttributeName: userId
+            KeyType: RANGE
+        BillingMode: PAY_PER_REQUEST
+        GlobalSecondaryIndexes:
+          - IndexName: EmailIndex
+            KeySchema:
+              - AttributeName: email
+                KeyType: HASH
+            Projection:
+              ProjectionType: "ALL"  
+
+plugins:
+  - serverless-python-requirements
+  - serverless-offline
+  - serverless-dynamodb-local
+
+
+custom:
+  pythonRequirements:
+    dockerizePip: true
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'us-east-1'}
+  cors:
+    origins:
+      - '*'
+    headers:
+      - Content-Type
+      - X-Amz-Date
+      - Authorization
+      - X-Api-Key
+      - X-Amz-Security-Token
+    allowCredentials: true
+
+environment:
+  DYNAMODB_TABLE: cms-users
